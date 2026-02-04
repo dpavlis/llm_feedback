@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ app_name }}</title>
+    <link rel="icon" type="image/svg+xml" href="/static/images/cloverdx-logo-white.svg">
+    <link rel="stylesheet" href="/static/css/style.css">
+    <!-- Marked.js for Markdown rendering -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <!-- highlight.js for code syntax highlighting -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/styles/github.min.css">
+    <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/highlight.min.js"></script>
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar: Conversation List -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <h2>{{ app_name }}</h2>
+                <div class="model-info">Model: {{ model_name }}</div>
+            </div>
+            <button id="new-conversation-btn" class="new-conversation-btn">
+                + New Conversation
+            </button>
+            <div id="conversation-list" class="conversation-list"></div>
+        </aside>
+
+        <!-- Main Chat Area -->
+        <main class="chat-container">
+            <!-- Welcome screen (shown when no conversation is active) -->
+            <div id="welcome-screen" class="welcome-screen">
+                <img src="/static/images/cloverdx-logo-white.svg" alt="CloverDX" class="welcome-logo">
+                <h1>Welcome to {{ app_name }}</h1>
+                <p>Start a new conversation to begin testing the LLM.</p>
+                <button id="welcome-new-btn" class="primary-btn">
+                    Start New Conversation
+                </button>
+            </div>
+
+            <!-- Chat area (shown when a conversation is active) -->
+            <div id="chat-area" class="chat-area hidden">
+                <div id="chat-messages" class="messages-area"></div>
+
+                <!-- Typing indicator -->
+                <div id="typing-indicator" class="typing-indicator hidden">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </div>
+
+                <!-- Input Area -->
+                <div class="input-area">
+                    <textarea
+                        id="message-input"
+                        placeholder="Type your message... (Enter to send, Shift+Enter for new line)"
+                        rows="1"
+                    ></textarea>
+                    <button id="send-btn" class="send-btn" disabled>
+                        Send
+                    </button>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Feedback Modal -->
+    <div id="feedback-modal" class="modal hidden">
+        <div class="modal-overlay"></div>
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Rate this response</h3>
+                <button id="close-modal-btn" class="close-btn">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="rating-section">
+                    <label>Rating:</label>
+                    <div id="rating-stars" class="rating-stars">
+                        <button class="star" data-rating="1">★</button>
+                        <button class="star" data-rating="2">★</button>
+                        <button class="star" data-rating="3">★</button>
+                        <button class="star" data-rating="4">★</button>
+                        <button class="star" data-rating="5">★</button>
+                    </div>
+                </div>
+                <div class="comment-section">
+                    <label for="feedback-comment">Comments (optional):</label>
+                    <textarea
+                        id="feedback-comment"
+                        placeholder="What did you think about this response?"
+                        rows="3"
+                    ></textarea>
+                </div>
+                <div class="preferred-section">
+                    <label for="preferred-response">What would be a better response? (optional):</label>
+                    <textarea
+                        id="preferred-response"
+                        placeholder="If you had a better response in mind, share it here..."
+                        rows="4"
+                    ></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="cancel-feedback-btn" class="secondary-btn">Cancel</button>
+                <button id="submit-feedback-btn" class="primary-btn">Submit Feedback</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- New Conversation Modal -->
+    <div id="new-conversation-modal" class="modal hidden">
+        <div class="modal-overlay"></div>
+        <div class="modal-content modal-small">
+            <div class="modal-header">
+                <h3>New Conversation</h3>
+                <button id="close-new-conv-btn" class="close-btn">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="name-section">
+                    <label for="user-name-input">Your name (optional):</label>
+                    <input
+                        type="text"
+                        id="user-name-input"
+                        placeholder="Enter your name..."
+                        maxlength="100"
+                    >
+                    <p class="help-text">This will be saved with your conversation for feedback tracking.</p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="cancel-new-conv-btn" class="secondary-btn">Cancel</button>
+                <button id="start-conversation-btn" class="primary-btn">Start Conversation</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Error Toast -->
+    <div id="error-toast" class="toast hidden">
+        <span id="error-message"></span>
+    </div>
+
+    <script src="/static/js/chat.js"></script>
+</body>
+</html>
