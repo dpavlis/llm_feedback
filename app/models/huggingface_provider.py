@@ -7,12 +7,13 @@ import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 
 from app.config import settings
+from app.models.base_provider import BaseLLMProvider
 
 logger = logging.getLogger(__name__)
 
 
-class LLMManager:
-    """Manages LLM model loading and thread-safe inference."""
+class HuggingFaceProvider(BaseLLMProvider):
+    """LLM provider using local HuggingFace Transformers models."""
 
     def __init__(self):
         self.model: Optional[AutoModelForCausalLM] = None
@@ -193,9 +194,9 @@ class LLMManager:
         if not self._loaded:
             raise RuntimeError("Model not loaded. Call load_model() first.")
 
-        max_new_tokens = max_new_tokens or settings.max_response_tokens
-        temperature = temperature or settings.temperature
-        top_p = top_p or settings.top_p
+        max_new_tokens = max_new_tokens if max_new_tokens is not None else settings.max_response_tokens
+        temperature = temperature if temperature is not None else settings.temperature
+        top_p = top_p if top_p is not None else settings.top_p
 
         # Prepend system prompt if configured
         if settings.system_prompt:

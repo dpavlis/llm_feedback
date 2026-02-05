@@ -1,7 +1,15 @@
+from enum import Enum
+
 from pydantic_settings import BaseSettings
 from pydantic import Field
 from typing import Optional
 from pathlib import Path
+
+
+class LLMProvider(str, Enum):
+    """Supported LLM provider backends."""
+    huggingface = "huggingface"
+    openai = "openai"
 
 
 class Settings(BaseSettings):
@@ -45,11 +53,27 @@ class Settings(BaseSettings):
     )
 
     # ===================
+    # Provider Settings
+    # ===================
+    llm_provider: LLMProvider = Field(
+        default=LLMProvider.huggingface,
+        description="LLM provider to use: 'huggingface' (local model) or 'openai' (API)"
+    )
+    openai_api_key: Optional[str] = Field(
+        default=None,
+        description="OpenAI API key (required when llm_provider=openai)"
+    )
+    openai_base_url: Optional[str] = Field(
+        default=None,
+        description="Custom OpenAI-compatible API base URL (for Azure, vLLM, etc.)"
+    )
+
+    # ===================
     # Model Settings
     # ===================
     model_name: str = Field(
         default="Qwen/Qwen2.5-Coder-7B-Instruct",
-        description="HuggingFace model name or local path to the model"
+        description="Model name: HuggingFace model ID, or OpenAI model name (e.g., 'gpt-4o-mini', 'ft:gpt-4o-mini:org:custom:id')"
     )
     model_path: Optional[Path] = Field(
         default=None,

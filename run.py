@@ -81,18 +81,25 @@ Configuration:
 
     # Build model info string
     model_source = str(settings.model_path) if settings.model_path else settings.model_name
+    provider_info = settings.llm_provider.value
+    if settings.llm_provider.value == "openai" and settings.openai_base_url:
+        provider_info += f" ({settings.openai_base_url})"
+
     device_info = settings.model_device or "auto-detect"
-    if settings.cuda_visible_devices:
+    if settings.llm_provider.value == "openai":
+        device_info = "API (remote)"
+    elif settings.cuda_visible_devices:
         device_info += f" (CUDA devices: {settings.cuda_visible_devices})"
 
     print(f"""
 ╔══════════════════════════════════════════════════════════════════════════╗
 ║                    {settings.app_name:^52} ║
 ╠══════════════════════════════════════════════════════════════════════════╣
-║  Model:   {model_source:<64} ║
-║  Device:  {device_info:<64} ║
-║  Server:  http://{args.host}:{args.port:<57} ║
-║  Workers: {args.workers:<64} ║
+║  Provider: {provider_info:<63} ║
+║  Model:    {model_source:<63} ║
+║  Device:   {device_info:<63} ║
+║  Server:   http://{args.host}:{args.port:<56} ║
+║  Workers:  {args.workers:<63} ║
 ╚══════════════════════════════════════════════════════════════════════════╝
     """)
 

@@ -7,7 +7,7 @@ from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse
 
 from app.config import settings
-from app.models import LLMManager
+from app.models import create_llm_provider
 from app.services import SessionManager, ConversationPersistence
 from app.routers import chat_router
 
@@ -26,12 +26,12 @@ async def lifespan(app: FastAPI):
     logger.info("Starting LLM Feedback Chat application...")
 
     # Initialize services
-    app.state.llm_manager = LLMManager()
+    app.state.llm_manager = create_llm_provider()
     app.state.session_manager = SessionManager()
     app.state.persistence = ConversationPersistence()
 
     # Load the model (this may take a while)
-    logger.info(f"Loading model: {settings.model_name}")
+    logger.info(f"Loading model: {settings.model_name} (provider: {settings.llm_provider.value})")
     app.state.llm_manager.load_model()
     logger.info("Model loaded successfully!")
 
