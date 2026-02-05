@@ -1,8 +1,10 @@
-# CloverDX LLM Chat
+# LLM Feedback
 
-A multi-user web application for testing and evaluating LLM models with conversation logging and feedback collection.
+A multi-user web application for testing and evaluating (own) LLM models with conversation logging and feedback collection.
 
-![CloverDX LLM Chat](static/images/cloverdx-logo-white.svg)
+## Why?
+
+When training own large language models (LLMs), it's crucial to have a user-friendly interface for testing and gathering feedback. This application provides a web-based chat interface that allows multiple users to interact with LLMs, log conversations, and submit feedback on the responses (which can be used to generate new training data). It supports various models, GPU configurations, and offers persistent storage of conversations for later analysis.
 
 ## Features
 
