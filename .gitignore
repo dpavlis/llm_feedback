@@ -55,3 +55,7 @@ htmlcov/
 
 # MyPy
 .mypy_cache/
+
+#configs
+.env.openai
+
