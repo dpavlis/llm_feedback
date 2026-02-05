@@ -119,6 +119,36 @@ body {
     margin-top: 0.25rem;
 }
 
+.conversation-item .copy-conv-btn {
+    position: absolute;
+    top: 0.5rem;
+    right: 1.75rem;
+    background: none;
+    border: none;
+    color: rgba(255, 255, 255, 0.4);
+    cursor: pointer;
+    padding: 0.25rem;
+    line-height: 1;
+    opacity: 0;
+    transition: opacity 0.2s, color 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.conversation-item:hover .copy-conv-btn {
+    opacity: 1;
+}
+
+.conversation-item .copy-conv-btn:hover {
+    color: rgba(255, 255, 255, 0.8);
+}
+
+.conversation-item .copy-conv-btn.copied {
+    color: #22c55e;
+    opacity: 1;
+}
+
 .conversation-item .delete-btn {
     position: absolute;
     top: 0.5rem;
@@ -356,6 +386,47 @@ body {
     margin-top: 0.5rem;
     padding-top: 0.5rem;
     border-top: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.copy-msg-btn {
+    background: none;
+    border: none;
+    color: var(--secondary-color);
+    cursor: pointer;
+    padding: 0.25rem;
+    border-radius: 0.25rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: color 0.2s, background-color 0.2s;
+    opacity: 0.5;
+}
+
+.copy-msg-btn:hover {
+    opacity: 1;
+    background-color: rgba(0, 0, 0, 0.05);
+}
+
+.copy-msg-btn.copied {
+    color: #22c55e;
+    opacity: 1;
+}
+
+.message.user .message-actions {
+    border-top-color: rgba(255, 255, 255, 0.2);
+}
+
+.message.user .copy-msg-btn {
+    color: rgba(255, 255, 255, 0.7);
+}
+
+.message.user .copy-msg-btn:hover {
+    color: #ffffff;
+    background-color: rgba(255, 255, 255, 0.15);
+}
+
+.message.user .copy-msg-btn.copied {
+    color: #bbf7d0;
 }
 
 .feedback-btn {

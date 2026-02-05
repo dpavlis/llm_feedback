@@ -177,14 +177,24 @@ class ChatApp {
             item.innerHTML = `
                 <div class="preview">${this.escapeHtml(preview)}</div>
                 <div class="meta">${conv.message_count} messages · ${dateStr}</div>
+                <button class="copy-conv-btn" title="Copy conversation as JSON">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                </button>
                 <button class="delete-btn" title="Delete conversation">&times;</button>
             `;
 
             // Click on item to select conversation
             item.addEventListener('click', (e) => {
-                if (!e.target.classList.contains('delete-btn')) {
+                if (!e.target.classList.contains('delete-btn') && !e.target.closest('.copy-conv-btn')) {
                     this.selectConversation(conv.conversation_id);
                 }
+            });
+
+            // Click on copy conversation button
+            const copyConvBtn = item.querySelector('.copy-conv-btn');
+            copyConvBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.copyConversationAsJson(conv.conversation_id, copyConvBtn);
             });
 
             // Click on delete button
@@ -385,11 +395,20 @@ class ChatApp {
         }
         messageDiv.appendChild(contentDiv);
 
+        // Add actions row (copy button + feedback button)
+        const actionsDiv = document.createElement('div');
+        actionsDiv.className = 'message-actions';
+
+        // Copy button for all messages
+        const copyBtn = document.createElement('button');
+        copyBtn.className = 'copy-msg-btn';
+        copyBtn.title = 'Copy to clipboard';
+        copyBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
+        copyBtn.addEventListener('click', () => this.copyMessageToClipboard(content, copyBtn));
+        actionsDiv.appendChild(copyBtn);
+
         // Add feedback button for assistant messages
         if (role === 'assistant' && messageId) {
-            const actionsDiv = document.createElement('div');
-            actionsDiv.className = 'message-actions';
-
             const feedbackBtn = document.createElement('button');
             feedbackBtn.className = 'feedback-btn';
             if (feedback) {
@@ -398,14 +417,62 @@ class ChatApp {
             } else {
                 feedbackBtn.textContent = '👍 Rate this response';
             }
-            feedbackBtn.addEventListener('click', () => this.openFeedbackModal(messageId));
-
+            feedbackBtn.addEventListener('click', () => this.openFeedbackModal(messageId, feedback));
             actionsDiv.appendChild(feedbackBtn);
-            messageDiv.appendChild(actionsDiv);
         }
+
+        messageDiv.appendChild(actionsDiv);
 
         this.messagesArea.appendChild(messageDiv);
         this.scrollToBottom();
+    }
+
+    async copyMessageToClipboard(content, btn) {
+        try {
+            await navigator.clipboard.writeText(content);
+            btn.classList.add('copied');
+            btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
+            setTimeout(() => {
+                btn.classList.remove('copied');
+                btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
+            }, 2000);
+        } catch (e) {
+            console.error('Failed to copy:', e);
+        }
+    }
+
+    async copyConversationAsJson(conversationId, btn) {
+        try {
+            const response = await fetch(`/api/conversations/${conversationId}`);
+            if (!response.ok) throw new Error('Failed to load conversation');
+            const data = await response.json();
+
+            const messages = data.messages.map(msg => {
+                if (msg.role === 'user') {
+                    return { user: msg.content };
+                } else {
+                    const entry = { assistant: msg.content };
+                    if (msg.feedback) {
+                        if (msg.feedback.comment) entry.user_comment = msg.feedback.comment;
+                        if (msg.feedback.preferred_response) entry.suggestion = msg.feedback.preferred_response;
+                    }
+                    return entry;
+                }
+            });
+
+            const json = JSON.stringify({ messages }, null, 2);
+            await navigator.clipboard.writeText(json);
+
+            btn.classList.add('copied');
+            btn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
+            setTimeout(() => {
+                btn.classList.remove('copied');
+                btn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
+            }, 2000);
+        } catch (e) {
+            console.error('Failed to copy conversation:', e);
+            this.showError('Failed to copy conversation');
+        }
     }
 
     showTypingIndicator() {
@@ -422,12 +489,12 @@ class ChatApp {
     }
 
     // Feedback Modal
-    openFeedbackModal(messageId) {
+    openFeedbackModal(messageId, feedback = null) {
         this.currentFeedbackMessageId = messageId;
-        this.selectedRating = null;
-        this.highlightStars(0);
-        this.feedbackComment.value = '';
-        this.preferredResponse.value = '';
+        this.selectedRating = feedback?.rating || null;
+        this.highlightStars(this.selectedRating || 0);
+        this.feedbackComment.value = feedback?.comment || '';
+        this.preferredResponse.value = feedback?.preferred_response || '';
         this.feedbackModal.classList.remove('hidden');
     }
 
