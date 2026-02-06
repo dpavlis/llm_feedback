@@ -503,9 +503,9 @@ body {
     border-radius: 0.5rem;
     font-size: 0.9375rem;
     font-family: inherit;
-    resize: none;
+    resize: vertical;
     min-height: 52px;
-    max-height: 150px;
+    max-height: 60vh;
     line-height: 1.5;
     overflow-y: auto;
 }

@@ -9,6 +9,8 @@ class ChatApp {
         this.selectedRating = null;
         this.isLoading = false;
         this.userName = localStorage.getItem('llm_chat_user_name') || '';
+        this.manualInputHeight = null;
+        this.lastAutoResizeHeight = null;
 
         this.init();
     }
@@ -109,6 +111,9 @@ class ChatApp {
             this.autoResizeTextarea();
         });
 
+        this.messageInput.addEventListener('mouseup', () => this.captureManualResize());
+        this.messageInput.addEventListener('touchend', () => this.captureManualResize());
+
         // Rating stars
         this.ratingStars.forEach(star => {
             star.addEventListener('click', () => this.setRating(parseInt(star.dataset.rating)));
@@ -142,7 +147,22 @@ class ChatApp {
 
     autoResizeTextarea() {
         this.messageInput.style.height = 'auto';
-        this.messageInput.style.height = Math.min(this.messageInput.scrollHeight, 150) + 'px';
+        const autoHeight = Math.min(this.messageInput.scrollHeight, 150);
+        const targetHeight = this.manualInputHeight
+            ? Math.max(autoHeight, this.manualInputHeight)
+            : autoHeight;
+        this.messageInput.style.height = targetHeight + 'px';
+        this.lastAutoResizeHeight = targetHeight;
+    }
+
+    captureManualResize() {
+        const currentHeight = this.messageInput.offsetHeight;
+        if (this.lastAutoResizeHeight === null) {
+            return;
+        }
+        if (Math.abs(currentHeight - this.lastAutoResizeHeight) > 1) {
+            this.manualInputHeight = currentHeight;
+        }
     }
 
     async loadConversations() {
@@ -429,7 +449,10 @@ class ChatApp {
 
     async copyMessageToClipboard(content, btn) {
         try {
-            await navigator.clipboard.writeText(content);
+            const copied = await this.writeToClipboard(content);
+            if (!copied) {
+                throw new Error('Clipboard write failed');
+            }
             btn.classList.add('copied');
             btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
             setTimeout(() => {
@@ -438,6 +461,7 @@ class ChatApp {
             }, 2000);
         } catch (e) {
             console.error('Failed to copy:', e);
+            this.showError('Failed to copy message');
         }
     }
 
@@ -461,7 +485,10 @@ class ChatApp {
             });
 
             const json = JSON.stringify({ messages }, null, 2);
-            await navigator.clipboard.writeText(json);
+            const copied = await this.writeToClipboard(json);
+            if (!copied) {
+                throw new Error('Clipboard write failed');
+            }
 
             btn.classList.add('copied');
             btn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
@@ -473,6 +500,35 @@ class ChatApp {
             console.error('Failed to copy conversation:', e);
             this.showError('Failed to copy conversation');
         }
+    }
+
+    async writeToClipboard(text) {
+        if (navigator.clipboard && window.isSecureContext) {
+            await navigator.clipboard.writeText(text);
+            return true;
+        }
+
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        textarea.setAttribute('readonly', '');
+        textarea.style.position = 'fixed';
+        textarea.style.top = '-9999px';
+        textarea.style.left = '-9999px';
+        document.body.appendChild(textarea);
+
+        textarea.select();
+        textarea.setSelectionRange(0, textarea.value.length);
+        let copied = false;
+
+        try {
+            copied = document.execCommand('copy');
+        } catch (e) {
+            copied = false;
+        } finally {
+            document.body.removeChild(textarea);
+        }
+
+        return copied;
     }
 
     showTypingIndicator() {
