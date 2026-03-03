@@ -1,4 +1,5 @@
 import logging
+import time
 from datetime import datetime
 from typing import Optional
 
@@ -106,7 +107,11 @@ async def list_conversations(request: Request, response: Response):
             session_id, conversation["conversation_id"]
         )
         try:
-            conversation["token_count"] = llm_manager.count_tokens(messages)
+            breakdown = llm_manager.count_token_breakdown(messages)
+            conversation["token_breakdown"] = breakdown
+            conversation["token_count"] = breakdown.get(
+                "total", llm_manager.count_tokens(messages)
+            )
         except Exception as exc:
             logger.warning(
                 "Failed to count tokens for conversation %s: %s",
@@ -114,6 +119,7 @@ async def list_conversations(request: Request, response: Response):
                 exc,
             )
             conversation["token_count"] = 0
+            conversation["token_breakdown"] = {}
 
     return ConversationListResponse(
         conversations=[ConversationInfo(**conv) for conv in conversations]
@@ -202,7 +208,9 @@ async def send_message(chat_request: ChatRequest, request: Request, response: Re
 
     # Generate response
     try:
+        start_time = time.perf_counter()
         llm_response = llm_manager.generate_response(messages)
+        elapsed_ms = int((time.perf_counter() - start_time) * 1000)
     except Exception as e:
         logger.error(f"LLM generation failed: {e}")
         raise HTTPException(status_code=500, detail="Failed to generate response")
@@ -213,6 +221,7 @@ async def send_message(chat_request: ChatRequest, request: Request, response: Re
         chat_request.conversation_id,
         role="assistant",
         content=llm_response,
+        generation_ms=elapsed_ms,
     )
 
     # Persist to file
@@ -235,6 +244,7 @@ async def send_message(chat_request: ChatRequest, request: Request, response: Re
         message_id=assistant_message_id,
         response=llm_response,
         timestamp=timestamp,
+        generation_ms=elapsed_ms,
     )
 
 

@@ -282,6 +282,33 @@ class HuggingFaceProvider(BaseLLMProvider):
             return len(input_ids[0])
         return len(input_ids)
 
+    def count_token_breakdown(self, messages: list[dict[str, str]]) -> dict[str, int]:
+        """Count tokens by role for the given conversation messages."""
+        if not self._loaded or self.tokenizer is None:
+            raise RuntimeError("Model not loaded. Call load_model() first.")
+
+        system_tokens = 0
+        if settings.system_prompt:
+            system_tokens = len(self.tokenizer.encode(settings.system_prompt))
+
+        user_tokens = 0
+        assistant_tokens = 0
+        for message in messages:
+            content = str(message.get("content", ""))
+            token_count = len(self.tokenizer.encode(content))
+            if message.get("role") == "user":
+                user_tokens += token_count
+            elif message.get("role") == "assistant":
+                assistant_tokens += token_count
+
+        total_tokens = self.count_tokens(messages)
+        return {
+            "system": system_tokens,
+            "user": user_tokens,
+            "assistant": assistant_tokens,
+            "total": total_tokens,
+        }
+
     @property
     def is_loaded(self) -> bool:
         """Check if the model is loaded."""

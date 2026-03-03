@@ -48,6 +48,14 @@ class BaseLLMProvider(abc.ABC):
         """
         ...
 
+    @abc.abstractmethod
+    def count_token_breakdown(self, messages: list[dict[str, str]]) -> dict[str, int]:
+        """Count tokens by role for the given conversation messages.
+
+        Returns a dict with keys: system, user, assistant, total.
+        """
+        ...
+
     @property
     @abc.abstractmethod
     def is_loaded(self) -> bool:

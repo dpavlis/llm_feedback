@@ -19,6 +19,7 @@
             <div class="sidebar-header">
                 <h2>{{ app_name }}</h2>
                 <div class="model-info">Model: {{ model_name }}</div>
+                <div class="model-info">Context: {{ max_model_len }} tokens</div>
             </div>
             <button id="new-conversation-btn" class="new-conversation-btn">
                 + New Conversation
@@ -139,6 +140,11 @@
         <span id="error-message"></span>
     </div>
 
+    <script>
+        window.APP_CONFIG = {
+            maxModelLen: {{ max_model_len }}
+        };
+    </script>
     <script src="/static/js/chat.js"></script>
 </body>
 </html>

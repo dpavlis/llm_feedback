@@ -12,6 +12,7 @@ class Message(BaseModel):
     content: str
     timestamp: str
     feedback: Optional[dict] = None
+    generation_ms: Optional[int] = None
 
 
 class ChatRequest(BaseModel):
@@ -28,6 +29,7 @@ class ChatResponse(BaseModel):
     message_id: str
     response: str
     timestamp: str
+    generation_ms: Optional[int] = None
 
 
 class ConversationInfo(BaseModel):
@@ -37,6 +39,7 @@ class ConversationInfo(BaseModel):
     created_at: str
     message_count: int
     token_count: int = 0
+    token_breakdown: dict[str, int] = Field(default_factory=dict)
     preview: str = ""
 
 

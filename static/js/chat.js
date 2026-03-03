@@ -11,6 +11,9 @@ class ChatApp {
         this.userName = localStorage.getItem('llm_chat_user_name') || '';
         this.manualInputHeight = null;
         this.lastAutoResizeHeight = null;
+        this.maxModelLen = window.APP_CONFIG && Number.isFinite(window.APP_CONFIG.maxModelLen)
+            ? window.APP_CONFIG.maxModelLen
+            : null;
 
         this.init();
     }
@@ -198,10 +201,17 @@ class ChatApp {
                 ? conv.token_count
                 : 0;
             const tokenText = tokenCount.toLocaleString();
+            const breakdownText = this.formatTokenBreakdown(conv.token_breakdown);
+            const status = this.getTokenStatus(tokenCount);
+            const statusMarkup = status
+                ? `<span class="token-status ${status.className}" title="${status.title}">${status.label}</span> `
+                : '';
+            const metaText = `${conv.message_count} messages · ${tokenText} tokens`;
+            const breakdownMarkup = breakdownText ? ` · ${breakdownText}` : '';
 
             item.innerHTML = `
                 <div class="preview">${this.escapeHtml(preview)}</div>
-                <div class="meta">${conv.message_count} messages · ${tokenText} tokens · ${dateStr}</div>
+                <div class="meta">${statusMarkup}${metaText}${breakdownMarkup} · ${dateStr}</div>
                 <button class="copy-conv-btn" title="Copy conversation as JSON">
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
                 </button>
@@ -233,6 +243,32 @@ class ChatApp {
         });
     }
 
+    formatTokenBreakdown(breakdown) {
+        if (!breakdown || typeof breakdown !== 'object') {
+            return '';
+        }
+        const system = Number.isFinite(breakdown.system) ? breakdown.system : 0;
+        const user = Number.isFinite(breakdown.user) ? breakdown.user : 0;
+        const assistant = Number.isFinite(breakdown.assistant) ? breakdown.assistant : 0;
+        if (system === 0 && user === 0 && assistant === 0) {
+            return '';
+        }
+        return `sys ${system.toLocaleString()} · user ${user.toLocaleString()} · asst ${assistant.toLocaleString()}`;
+    }
+
+    getTokenStatus(tokenCount) {
+        if (!this.maxModelLen || !Number.isFinite(tokenCount)) {
+            return null;
+        }
+        if (tokenCount >= this.maxModelLen) {
+            return { label: 'X', className: 'token-error', title: 'Context limit exceeded' };
+        }
+        if (tokenCount >= this.maxModelLen * 0.9) {
+            return { label: '!', className: 'token-warning', title: 'Approaching context limit' };
+        }
+        return null;
+    }
+
     async selectConversation(conversationId) {
         try {
             const response = await fetch(`/api/conversations/${conversationId}`);
@@ -250,7 +286,7 @@ class ChatApp {
             // Clear and render messages
             this.messagesArea.innerHTML = '';
             data.messages.forEach(msg => {
-                this.appendMessage(msg.role, msg.content, msg.id, msg.feedback);
+                this.appendMessage(msg.role, msg.content, msg.id, msg.feedback, msg.generation_ms);
             });
 
             // Update conversation list active state
@@ -391,7 +427,7 @@ class ChatApp {
 
             const data = await response.json();
             this.hideTypingIndicator();
-            this.appendMessage('assistant', data.response, data.message_id);
+            this.appendMessage('assistant', data.response, data.message_id, null, data.generation_ms);
 
             // Reload conversation list to update preview
             this.loadConversations();
@@ -405,7 +441,7 @@ class ChatApp {
         }
     }
 
-    appendMessage(role, content, messageId = null, feedback = null) {
+    appendMessage(role, content, messageId = null, feedback = null, generationMs = null) {
         const messageDiv = document.createElement('div');
         messageDiv.className = `message ${role}`;
 
@@ -444,12 +480,26 @@ class ChatApp {
             }
             feedbackBtn.addEventListener('click', () => this.openFeedbackModal(messageId, feedback));
             actionsDiv.appendChild(feedbackBtn);
+
+            if (Number.isFinite(generationMs)) {
+                const genTime = document.createElement('span');
+                genTime.className = 'gen-time';
+                genTime.textContent = `⏱ ${this.formatDurationMs(generationMs)}`;
+                actionsDiv.appendChild(genTime);
+            }
         }
 
         messageDiv.appendChild(actionsDiv);
 
         this.messagesArea.appendChild(messageDiv);
         this.scrollToBottom();
+    }
+
+    formatDurationMs(durationMs) {
+        const totalSeconds = Math.max(0, Math.round(durationMs / 1000));
+        const minutes = Math.floor(totalSeconds / 60);
+        const seconds = totalSeconds % 60;
+        return `${minutes}:${seconds.toString().padStart(2, '0')}`;
     }
 
     async copyMessageToClipboard(content, btn) {

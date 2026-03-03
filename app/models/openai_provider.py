@@ -111,6 +111,41 @@ class OpenAIProvider(BaseLLMProvider):
         total_tokens += 3
         return total_tokens
 
+    def count_token_breakdown(self, messages: list[dict[str, str]]) -> dict[str, int]:
+        """Count tokens by role for the given conversation messages."""
+        if not messages:
+            return {"system": 0, "user": 0, "assistant": 0, "total": 0}
+
+        if settings.system_prompt:
+            messages = [{"role": "system", "content": settings.system_prompt}] + messages
+
+        try:
+            encoding = tiktoken.encoding_for_model(settings.model_name)
+        except KeyError:
+            encoding = tiktoken.get_encoding("cl100k_base")
+
+        system_tokens = 0
+        user_tokens = 0
+        assistant_tokens = 0
+        for message in messages:
+            content = str(message.get("content", ""))
+            token_count = len(encoding.encode(content))
+            role = message.get("role")
+            if role == "system":
+                system_tokens += token_count
+            elif role == "user":
+                user_tokens += token_count
+            elif role == "assistant":
+                assistant_tokens += token_count
+
+        total_tokens = self.count_tokens(messages)
+        return {
+            "system": system_tokens,
+            "user": user_tokens,
+            "assistant": assistant_tokens,
+            "total": total_tokens,
+        }
+
     @property
     def is_loaded(self) -> bool:
         return self._loaded

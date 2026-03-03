@@ -111,6 +111,7 @@ class SessionManager:
         conversation_id: str,
         role: str,
         content: str,
+        generation_ms: Optional[int] = None,
     ) -> Optional[str]:
         """
         Add a message to a conversation.
@@ -132,6 +133,7 @@ class SessionManager:
             "content": content,
             "timestamp": datetime.utcnow().isoformat(),
             "feedback": None,
+            "generation_ms": generation_ms,
         }
 
         async with self._lock:
