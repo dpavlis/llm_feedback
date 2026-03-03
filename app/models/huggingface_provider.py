@@ -264,17 +264,23 @@ class HuggingFaceProvider(BaseLLMProvider):
         if not messages:
             return 0
 
+        if settings.system_prompt:
+            messages = [{"role": "system", "content": settings.system_prompt}] + messages
+
         with self.lock:
-            token_ids = self.tokenizer.apply_chat_template(
+            text = self.tokenizer.apply_chat_template(
                 messages,
-                tokenize=True,
+                tokenize=False,
                 add_generation_prompt=False,
             )
+            inputs = self.tokenizer(text, add_special_tokens=False)
 
-        if isinstance(token_ids, torch.Tensor):
-            return int(token_ids.shape[-1])
-
-        return len(token_ids)
+        input_ids = inputs.get("input_ids", [])
+        if isinstance(input_ids, torch.Tensor):
+            return int(input_ids.shape[-1])
+        if input_ids and isinstance(input_ids[0], list):
+            return len(input_ids[0])
+        return len(input_ids)
 
     @property
     def is_loaded(self) -> bool:

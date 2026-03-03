@@ -84,6 +84,9 @@ class OpenAIProvider(BaseLLMProvider):
         if not messages:
             return 0
 
+        if settings.system_prompt:
+            messages = [{"role": "system", "content": settings.system_prompt}] + messages
+
         try:
             encoding = tiktoken.encoding_for_model(settings.model_name)
         except KeyError:
@@ -101,7 +104,7 @@ class OpenAIProvider(BaseLLMProvider):
         for message in messages:
             total_tokens += tokens_per_message
             for key, value in message.items():
-                total_tokens += len(encoding.encode(value))
+                total_tokens += len(encoding.encode(str(value)))
                 if key == "name":
                     total_tokens += tokens_per_name
 
