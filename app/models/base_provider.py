@@ -36,6 +36,18 @@ class BaseLLMProvider(abc.ABC):
         """
         ...
 
+    @abc.abstractmethod
+    def count_tokens(self, messages: list[dict[str, str]]) -> int:
+        """Count tokens for the given conversation messages.
+
+        Args:
+            messages: List of dicts with 'role' and 'content' keys.
+
+        Returns:
+            Total token count for the messages.
+        """
+        ...
+
     @property
     @abc.abstractmethod
     def is_loaded(self) -> bool:

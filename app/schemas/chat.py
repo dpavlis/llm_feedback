@@ -36,6 +36,7 @@ class ConversationInfo(BaseModel):
     conversation_id: str
     created_at: str
     message_count: int
+    token_count: int = 0
     preview: str = ""
 
 

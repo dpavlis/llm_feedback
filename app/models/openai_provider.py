@@ -2,6 +2,8 @@ import logging
 import threading
 from typing import Optional
 
+import tiktoken
+
 from openai import OpenAI
 
 from app.config import settings
@@ -76,6 +78,35 @@ class OpenAIProvider(BaseLLMProvider):
             )
 
         return response.choices[0].message.content.strip()
+
+    def count_tokens(self, messages: list[dict[str, str]]) -> int:
+        """Count tokens for the given conversation messages."""
+        if not messages:
+            return 0
+
+        try:
+            encoding = tiktoken.encoding_for_model(settings.model_name)
+        except KeyError:
+            encoding = tiktoken.get_encoding("cl100k_base")
+
+        # Defaults based on OpenAI token counting guidance for chat models.
+        tokens_per_message = 3
+        tokens_per_name = 1
+
+        if settings.model_name == "gpt-3.5-turbo-0301":
+            tokens_per_message = 4
+            tokens_per_name = -1
+
+        total_tokens = 0
+        for message in messages:
+            total_tokens += tokens_per_message
+            for key, value in message.items():
+                total_tokens += len(encoding.encode(value))
+                if key == "name":
+                    total_tokens += tokens_per_name
+
+        total_tokens += 3
+        return total_tokens
 
     @property
     def is_loaded(self) -> bool:

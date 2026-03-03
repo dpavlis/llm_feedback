@@ -256,6 +256,26 @@ class HuggingFaceProvider(BaseLLMProvider):
 
             return response.strip()
 
+    def count_tokens(self, messages: list[dict[str, str]]) -> int:
+        """Count tokens for the given conversation messages."""
+        if not self._loaded or self.tokenizer is None:
+            raise RuntimeError("Model not loaded. Call load_model() first.")
+
+        if not messages:
+            return 0
+
+        with self.lock:
+            token_ids = self.tokenizer.apply_chat_template(
+                messages,
+                tokenize=True,
+                add_generation_prompt=False,
+            )
+
+        if isinstance(token_ids, torch.Tensor):
+            return int(token_ids.shape[-1])
+
+        return len(token_ids)
+
     @property
     def is_loaded(self) -> bool:
         """Check if the model is loaded."""

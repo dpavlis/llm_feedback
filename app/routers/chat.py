@@ -89,6 +89,7 @@ async def create_conversation(
 async def list_conversations(request: Request, response: Response):
     """List all conversations for the current session."""
     session_manager = request.app.state.session_manager
+    llm_manager = request.app.state.llm_manager
 
     session_id = get_session_id(request)
     if not session_id:
@@ -99,6 +100,20 @@ async def list_conversations(request: Request, response: Response):
     set_session_cookie(response, session_id)
 
     conversations = await session_manager.list_conversations(session_id)
+
+    for conversation in conversations:
+        messages = await session_manager.get_messages_for_llm(
+            session_id, conversation["conversation_id"]
+        )
+        try:
+            conversation["token_count"] = llm_manager.count_tokens(messages)
+        except Exception as exc:
+            logger.warning(
+                "Failed to count tokens for conversation %s: %s",
+                conversation["conversation_id"],
+                exc,
+            )
+            conversation["token_count"] = 0
 
     return ConversationListResponse(
         conversations=[ConversationInfo(**conv) for conv in conversations]
