@@ -117,6 +117,14 @@ body {
     font-size: 0.625rem;
     color: rgba(255, 255, 255, 0.4);
     margin-top: 0.25rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+}
+
+.conversation-item .meta .meta-line {
+    display: flex;
+    align-items: center;
 }
 
 .conversation-item .meta .token-status {

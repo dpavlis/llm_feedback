@@ -206,12 +206,16 @@ class ChatApp {
             const statusMarkup = status
                 ? `<span class="token-status ${status.className}" title="${status.title}">${status.label}</span> `
                 : '';
-            const metaText = `${conv.message_count} messages · ${tokenText} tokens`;
+            const metaText = `${conv.message_count} messages`;
             const breakdownMarkup = breakdownText ? ` · ${breakdownText}` : '';
 
             item.innerHTML = `
                 <div class="preview">${this.escapeHtml(preview)}</div>
-                <div class="meta">${statusMarkup}${metaText}${breakdownMarkup} · ${dateStr}</div>
+                <div class="meta">
+                    <div class="meta-line">${metaText}</div>
+                    <div class="meta-line">${statusMarkup}${tokenText} tokens${breakdownMarkup}</div>
+                    <div class="meta-line">${dateStr}</div>
+                </div>
                 <button class="copy-conv-btn" title="Copy conversation as JSON">
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
                 </button>
