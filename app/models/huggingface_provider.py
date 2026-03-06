@@ -161,6 +161,15 @@ class HuggingFaceProvider(BaseLLMProvider):
         torch_dtype = self._get_torch_dtype()
         quantization_config = self._get_quantization_config()
 
+        # bitsandbytes 8-bit MatMul only supports float16; force it to avoid
+        # per-operation bfloat16→float16 casts that cause severe slowdowns.
+        if quantization_config is not None and getattr(quantization_config, "load_in_8bit", False):
+            if torch_dtype == torch.bfloat16:
+                logger.warning(
+                    "8-bit quantization does not support bfloat16; overriding dtype to float16"
+                )
+                torch_dtype = torch.float16
+
         logger.info(f"Using dtype: {torch_dtype}")
 
         # Build model loading kwargs
@@ -170,6 +179,9 @@ class HuggingFaceProvider(BaseLLMProvider):
 
         if quantization_config:
             model_kwargs["quantization_config"] = quantization_config
+            # Always set dtype alongside quantization so non-quantized layers
+            # use the same dtype as the compute path.
+            model_kwargs["dtype"] = torch_dtype
         else:
             model_kwargs["dtype"] = torch_dtype
 

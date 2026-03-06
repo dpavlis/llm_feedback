@@ -69,7 +69,7 @@ async def index(request: Request):
         {
             "request": request,
             "app_name": settings.app_name,
-            "model_name": settings.model_name,
+            "model_name": app.state.llm_manager.model_name,
             "max_model_len": settings.max_model_len,
         },
     )
