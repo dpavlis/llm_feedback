@@ -249,6 +249,17 @@ class HuggingFaceProvider(BaseLLMProvider):
         self._resolved_model_name = self.tokenizer.name_or_path
         logger.info(f"Resolved model name: {self._resolved_model_name}")
 
+        # Log the chat template so mismatches are obvious in the startup log.
+        tok: PreTrainedTokenizer = self.tokenizer  # type: ignore[assignment]
+        chat_template = getattr(tok, "chat_template", None)
+        if chat_template:
+            logger.debug(f"Chat template:\n{chat_template}")
+            # Log just the first line as an INFO summary so it's always visible.
+            first_line = chat_template.strip().splitlines()[0]
+            logger.info(f"Chat template (first line): {first_line}")
+        else:
+            logger.warning("Tokenizer has no chat_template set; apply_chat_template may use a hardcoded fallback")
+
         # Discover all relevant stop tokens for this model.
         self._eos_token_ids = self._get_eos_token_ids()
         logger.info(f"Stop token IDs: {self._eos_token_ids}")
