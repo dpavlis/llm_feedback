@@ -23,6 +23,7 @@ class HuggingFaceProvider(BaseLLMProvider):
         self._loaded = False
         self._model_path: Optional[str] = None
         self._system_role_supported: bool = True
+        self._resolved_model_name: Optional[str] = None
 
         # Apply CUDA device restriction if configured
         self._configure_cuda_devices()
@@ -176,6 +177,11 @@ class HuggingFaceProvider(BaseLLMProvider):
 
         self.model.eval()
         self._loaded = True
+
+        # Resolve the effective model name from the loaded tokenizer so that
+        # a MODEL_PATH-only config shows the real model identifier, not the default.
+        self._resolved_model_name = self.tokenizer.name_or_path
+        logger.info(f"Resolved model name: {self._resolved_model_name}")
 
         # Log memory usage for CUDA
         if torch.cuda.is_available():
@@ -347,5 +353,9 @@ class HuggingFaceProvider(BaseLLMProvider):
 
     @property
     def model_name(self) -> str:
-        """Get the configured model name."""
-        return settings.model_name
+        """Get the effective model name.
+
+        Returns the name derived from the loaded model when MODEL_NAME was not
+        explicitly configured, falling back to the settings value otherwise.
+        """
+        return self._resolved_model_name or settings.model_name
