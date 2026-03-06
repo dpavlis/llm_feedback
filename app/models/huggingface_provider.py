@@ -5,7 +5,7 @@ from typing import Any, Optional, cast
 
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
-from transformers import PreTrainedModel, PreTrainedTokenizerBase
+from transformers import PreTrainedModel, PreTrainedTokenizer, PreTrainedTokenizerBase
 
 from app.config import settings
 from app.models.base_provider import BaseLLMProvider
@@ -25,6 +25,7 @@ class HuggingFaceProvider(BaseLLMProvider):
         self._model_path: Optional[str] = None
         self._system_role_supported: bool = True
         self._resolved_model_name: Optional[str] = None
+        self._eos_token_ids: list[int] = []
 
         # Apply CUDA device restriction if configured
         self._configure_cuda_devices()
@@ -80,6 +81,44 @@ class HuggingFaceProvider(BaseLLMProvider):
                 )
                 return torch.float16
         return dtype
+
+    def _get_eos_token_ids(self) -> list[int]:
+        """Build a complete list of stop-token IDs for this tokenizer.
+
+        Models like Gemma/CodeGemma use a dedicated <end_of_turn> token to
+        terminate a response turn; that token is NOT the same as eos_token_id.
+        If we only use eos_token_id the model overshoots its response and starts
+        generating the next turn on its own.
+        """
+        assert self.tokenizer is not None
+        # PreTrainedTokenizer has full stubs for eos_token_id / convert_tokens_to_ids
+        tok: PreTrainedTokenizer = self.tokenizer  # type: ignore[assignment]
+        eos_ids: list[int] = []
+
+        if tok.eos_token_id is not None and isinstance(tok.eos_token_id, int):
+            eos_ids.append(tok.eos_token_id)
+
+        # Well-known end-of-turn markers used by various model families.
+        candidates = [
+            "<end_of_turn>",   # Gemma / CodeGemma
+            "<|im_end|>",      # Qwen / ChatML
+            "<|end_of_turn|>", # Mistral v3+
+            "<|eot_id|>",      # Llama-3
+            "<EOT>",
+        ]
+        unk_id = tok.unk_token_id
+        for marker in candidates:
+            token_id = tok.convert_tokens_to_ids(marker)
+            # convert_tokens_to_ids returns unk_token_id when the token is unknown
+            if (
+                isinstance(token_id, int)
+                and token_id != unk_id
+                and token_id not in eos_ids
+            ):
+                logger.info(f"Adding stop token {marker!r} (id={token_id})")
+                eos_ids.append(token_id)
+
+        return eos_ids
 
     def _check_system_role_support(self) -> bool:
         """Return True if the tokenizer's chat template accepts a system role."""
@@ -210,6 +249,10 @@ class HuggingFaceProvider(BaseLLMProvider):
         self._resolved_model_name = self.tokenizer.name_or_path
         logger.info(f"Resolved model name: {self._resolved_model_name}")
 
+        # Discover all relevant stop tokens for this model.
+        self._eos_token_ids = self._get_eos_token_ids()
+        logger.info(f"Stop token IDs: {self._eos_token_ids}")
+
         # Log memory usage for CUDA
         if torch.cuda.is_available():
             for i in range(torch.cuda.device_count()):
@@ -277,6 +320,7 @@ class HuggingFaceProvider(BaseLLMProvider):
                 tokenize=False,
                 add_generation_prompt=True,
             ))
+            logger.debug(f"Rendered prompt:\n{text}")
 
             # Tokenize
             inputs = self.tokenizer(
@@ -291,10 +335,10 @@ class HuggingFaceProvider(BaseLLMProvider):
             attention_mask = cast(torch.Tensor, inputs["attention_mask"]).to(self.device)
 
             # Build generation kwargs
-            gen_kwargs = {
+            gen_kwargs: dict[str, Any] = {
                 "max_new_tokens": max_new_tokens,
                 "pad_token_id": self.tokenizer.pad_token_id,
-                "eos_token_id": self.tokenizer.eos_token_id,
+                "eos_token_id": self._eos_token_ids or self.tokenizer.eos_token_id,
             }
 
             # Only use sampling if temperature > 0
