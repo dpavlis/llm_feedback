@@ -22,6 +22,7 @@ class HuggingFaceProvider(BaseLLMProvider):
         self.device: Optional[str] = None
         self._loaded = False
         self._model_path: Optional[str] = None
+        self._system_role_supported: bool = True
 
         # Apply CUDA device restriction if configured
         self._configure_cuda_devices()
@@ -67,6 +68,33 @@ class HuggingFaceProvider(BaseLLMProvider):
             return torch.float16
         return torch.float32
 
+    def _check_system_role_support(self) -> bool:
+        """Return True if the tokenizer's chat template accepts a system role."""
+        try:
+            self.tokenizer.apply_chat_template(
+                [{"role": "system", "content": "test"}, {"role": "user", "content": "test"}],
+                tokenize=False,
+                add_generation_prompt=False,
+            )
+            logger.info("Chat template supports system role")
+            return True
+        except Exception:
+            logger.info("Chat template does not support system role; system prompt will be merged into first user message")
+            return False
+
+    def _apply_system_prompt(self, messages: list[dict], system_prompt: str) -> list[dict]:
+        """Prepend the system prompt, merging it into the first user message if needed."""
+        if self._system_role_supported:
+            return [{"role": "system", "content": system_prompt}] + messages
+        # Merge into the first user turn
+        messages = list(messages)
+        for i, msg in enumerate(messages):
+            if msg["role"] == "user":
+                messages[i] = {"role": "user", "content": f"{system_prompt}\n\n{msg['content']}"}
+                return messages
+        # Fallback: no user message found, prepend as a user turn
+        return [{"role": "user", "content": system_prompt}] + messages
+
     def _get_quantization_config(self) -> Optional[BitsAndBytesConfig]:
         """Get quantization config if enabled."""
         if settings.load_in_4bit or settings.model_dtype == "4bit":
@@ -110,6 +138,9 @@ class HuggingFaceProvider(BaseLLMProvider):
         # Ensure pad token is set
         if self.tokenizer.pad_token is None:
             self.tokenizer.pad_token = self.tokenizer.eos_token
+
+        # Detect whether this model's chat template supports the system role
+        self._system_role_supported = self._check_system_role_support()
 
         # Determine dtype and quantization
         torch_dtype = self._get_torch_dtype()
@@ -200,7 +231,7 @@ class HuggingFaceProvider(BaseLLMProvider):
 
         # Prepend system prompt if configured
         if settings.system_prompt:
-            messages = [{"role": "system", "content": settings.system_prompt}] + messages
+            messages = self._apply_system_prompt(messages, settings.system_prompt)
 
         # Use lock to ensure thread-safe inference
         with self.lock:
@@ -265,7 +296,7 @@ class HuggingFaceProvider(BaseLLMProvider):
             return 0
 
         if settings.system_prompt:
-            messages = [{"role": "system", "content": settings.system_prompt}] + messages
+            messages = self._apply_system_prompt(messages, settings.system_prompt)
 
         with self.lock:
             text = self.tokenizer.apply_chat_template(
