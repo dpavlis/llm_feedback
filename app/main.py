@@ -31,7 +31,8 @@ async def lifespan(app: FastAPI):
     app.state.persistence = ConversationPersistence()
 
     # Load the model (this may take a while)
-    logger.info(f"Loading model: {settings.model_name} (provider: {settings.llm_provider.value})")
+    model_source = str(settings.model_path) if settings.model_path else settings.model_name
+    logger.info(f"Loading model: {model_source} (provider: {settings.llm_provider.value})")
     app.state.llm_manager.load_model()
     logger.info("Model loaded successfully!")
 

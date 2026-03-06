@@ -1,10 +1,11 @@
 import os
 import threading
 import logging
-from typing import Optional
+from typing import Any, Optional, cast
 
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
+from transformers import PreTrainedModel, PreTrainedTokenizerBase
 
 from app.config import settings
 from app.models.base_provider import BaseLLMProvider
@@ -16,8 +17,8 @@ class HuggingFaceProvider(BaseLLMProvider):
     """LLM provider using local HuggingFace Transformers models."""
 
     def __init__(self):
-        self.model: Optional[AutoModelForCausalLM] = None
-        self.tokenizer: Optional[AutoTokenizer] = None
+        self.model: Optional[PreTrainedModel] = None
+        self.tokenizer: Optional[PreTrainedTokenizerBase] = None
         self.lock = threading.Lock()
         self.device: Optional[str] = None
         self._loaded = False
@@ -59,7 +60,7 @@ class HuggingFaceProvider(BaseLLMProvider):
         }
 
         if settings.model_dtype in dtype_map:
-            return dtype_map[settings.model_dtype]
+            return self._validated_dtype(dtype_map[settings.model_dtype])
 
         # Auto-detect based on device
         if self.device in ("cuda", "mps"):
@@ -69,8 +70,20 @@ class HuggingFaceProvider(BaseLLMProvider):
             return torch.float16
         return torch.float32
 
+    def _validated_dtype(self, dtype: torch.dtype) -> torch.dtype:
+        """Return dtype if supported on the current device, else fall back with a warning."""
+        if dtype == torch.bfloat16 and self.device == "cuda":
+            if not torch.cuda.is_bf16_supported():
+                logger.warning(
+                    "bfloat16 is not natively supported on this GPU; "
+                    "falling back to float16"
+                )
+                return torch.float16
+        return dtype
+
     def _check_system_role_support(self) -> bool:
         """Return True if the tokenizer's chat template accepts a system role."""
+        assert self.tokenizer is not None
         try:
             self.tokenizer.apply_chat_template(
                 [{"role": "system", "content": "test"}, {"role": "user", "content": "test"}],
@@ -135,6 +148,7 @@ class HuggingFaceProvider(BaseLLMProvider):
             self._model_path,
             trust_remote_code=settings.trust_remote_code,
         )
+        assert self.tokenizer is not None  # from_pretrained raises on failure
 
         # Ensure pad token is set
         if self.tokenizer.pad_token is None:
@@ -150,30 +164,31 @@ class HuggingFaceProvider(BaseLLMProvider):
         logger.info(f"Using dtype: {torch_dtype}")
 
         # Build model loading kwargs
-        model_kwargs = {
+        model_kwargs: dict[str, Any] = {
             "trust_remote_code": settings.trust_remote_code,
         }
 
         if quantization_config:
             model_kwargs["quantization_config"] = quantization_config
         else:
-            model_kwargs["torch_dtype"] = torch_dtype
+            model_kwargs["dtype"] = torch_dtype
 
         # Use device_map for CUDA, manual placement otherwise
         if self.device.startswith("cuda"):
             model_kwargs["device_map"] = "auto"
         elif self.device == "mps":
             # MPS doesn't support device_map, load to CPU then move
-            model_kwargs["torch_dtype"] = torch_dtype
+            model_kwargs["dtype"] = torch_dtype
 
         self.model = AutoModelForCausalLM.from_pretrained(
             self._model_path,
             **model_kwargs,
         )
+        assert self.model is not None  # from_pretrained raises on failure
 
         # Move to device if not using device_map
         if not self.device.startswith("cuda"):
-            self.model.to(self.device)
+            self.model.to(self.device)  # type: ignore[arg-type]
 
         self.model.eval()
         self._loaded = True
@@ -231,6 +246,9 @@ class HuggingFaceProvider(BaseLLMProvider):
         if not self._loaded:
             raise RuntimeError("Model not loaded. Call load_model() first.")
 
+        assert self.tokenizer is not None
+        assert self.model is not None
+
         max_new_tokens = max_new_tokens if max_new_tokens is not None else settings.max_response_tokens
         temperature = temperature if temperature is not None else settings.temperature
         top_p = top_p if top_p is not None else settings.top_p
@@ -242,11 +260,11 @@ class HuggingFaceProvider(BaseLLMProvider):
         # Use lock to ensure thread-safe inference
         with self.lock:
             # Apply chat template (Qwen2.5 supports this natively)
-            text = self.tokenizer.apply_chat_template(
+            text = cast(str, self.tokenizer.apply_chat_template(
                 messages,
                 tokenize=False,
                 add_generation_prompt=True,
-            )
+            ))
 
             # Tokenize
             inputs = self.tokenizer(
@@ -257,8 +275,8 @@ class HuggingFaceProvider(BaseLLMProvider):
             )
 
             # Move inputs to device
-            input_ids = inputs["input_ids"].to(self.device)
-            attention_mask = inputs["attention_mask"].to(self.device)
+            input_ids = cast(torch.Tensor, inputs["input_ids"]).to(self.device)
+            attention_mask = cast(torch.Tensor, inputs["attention_mask"]).to(self.device)
 
             # Build generation kwargs
             gen_kwargs = {
@@ -281,7 +299,7 @@ class HuggingFaceProvider(BaseLLMProvider):
 
             # Generate
             with torch.no_grad():
-                outputs = self.model.generate(
+                outputs = self.model.generate(  # type: ignore[call-overload]
                     input_ids,
                     attention_mask=attention_mask,
                     **gen_kwargs,
@@ -305,11 +323,11 @@ class HuggingFaceProvider(BaseLLMProvider):
             messages = self._apply_system_prompt(messages, settings.system_prompt)
 
         with self.lock:
-            text = self.tokenizer.apply_chat_template(
+            text = cast(str, self.tokenizer.apply_chat_template(
                 messages,
                 tokenize=False,
                 add_generation_prompt=False,
-            )
+            ))
             inputs = self.tokenizer(text, add_special_tokens=False)
 
         input_ids = inputs.get("input_ids", [])
