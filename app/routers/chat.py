@@ -209,7 +209,13 @@ async def send_message(chat_request: ChatRequest, request: Request, response: Re
     # Generate response
     try:
         start_time = time.perf_counter()
-        llm_response = llm_manager.generate_response(messages)
+        llm_response = llm_manager.generate_response(
+            messages,
+            temperature=chat_request.temperature,
+            top_p=chat_request.top_p,
+            top_k=chat_request.top_k,
+            repetition_penalty=chat_request.repetition_penalty,
+        )
         elapsed_ms = int((time.perf_counter() - start_time) * 1000)
     except Exception as e:
         logger.error(f"LLM generation failed: {e}")

@@ -72,6 +72,10 @@ async def index(request: Request):
             "model_name": app.state.llm_manager.model_name,
             "thinking_enabled": settings.enable_thinking_mode,
             "max_model_len": settings.max_model_len,
+            "default_temperature": settings.temperature,
+            "default_top_p": settings.top_p,
+            "default_top_k": settings.top_k,
+            "default_repetition_penalty": settings.repetition_penalty,
         },
     )
 

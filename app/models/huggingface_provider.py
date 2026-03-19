@@ -308,6 +308,8 @@ class HuggingFaceProvider(BaseLLMProvider):
         max_new_tokens: Optional[int] = None,
         temperature: Optional[float] = None,
         top_p: Optional[float] = None,
+        top_k: Optional[int] = None,
+        repetition_penalty: Optional[float] = None,
     ) -> str:
         """
         Generate a response given a conversation history.
@@ -318,6 +320,8 @@ class HuggingFaceProvider(BaseLLMProvider):
             max_new_tokens: Maximum tokens to generate (default from settings)
             temperature: Sampling temperature (default from settings)
             top_p: Top-p sampling parameter (default from settings)
+            top_k: Top-k sampling parameter (default from settings)
+            repetition_penalty: Repetition penalty (default from settings)
 
         Returns:
             The generated assistant response text.
@@ -331,6 +335,8 @@ class HuggingFaceProvider(BaseLLMProvider):
         max_new_tokens = max_new_tokens if max_new_tokens is not None else settings.max_response_tokens
         temperature = temperature if temperature is not None else settings.temperature
         top_p = top_p if top_p is not None else settings.top_p
+        effective_top_k = top_k if top_k is not None else settings.top_k
+        effective_rep_penalty = repetition_penalty if repetition_penalty is not None else settings.repetition_penalty
 
         # Prepend system prompt if configured
         if settings.system_prompt:
@@ -373,8 +379,8 @@ class HuggingFaceProvider(BaseLLMProvider):
                     "do_sample": True,
                     "temperature": temperature,
                     "top_p": top_p,
-                    "top_k": settings.top_k if settings.top_k > 0 else None,
-                    "repetition_penalty": settings.repetition_penalty,
+                    "top_k": effective_top_k if effective_top_k > 0 else None,
+                    "repetition_penalty": effective_rep_penalty,
                 })
             else:
                 gen_kwargs["do_sample"] = False

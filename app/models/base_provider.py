@@ -22,6 +22,8 @@ class BaseLLMProvider(abc.ABC):
         max_new_tokens: Optional[int] = None,
         temperature: Optional[float] = None,
         top_p: Optional[float] = None,
+        top_k: Optional[int] = None,
+        repetition_penalty: Optional[float] = None,
     ) -> str:
         """Generate a response given conversation history.
 
@@ -30,6 +32,8 @@ class BaseLLMProvider(abc.ABC):
             max_new_tokens: Maximum tokens to generate.
             temperature: Sampling temperature.
             top_p: Top-p sampling parameter.
+            top_k: Top-k sampling parameter (0 = disabled).
+            repetition_penalty: Repetition penalty factor.
 
         Returns:
             The generated assistant response text.

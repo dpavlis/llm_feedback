@@ -62,8 +62,14 @@ class OpenAIProvider(BaseLLMProvider):
         max_new_tokens: Optional[int] = None,
         temperature: Optional[float] = None,
         top_p: Optional[float] = None,
+        top_k: Optional[int] = None,
+        repetition_penalty: Optional[float] = None,
     ) -> str:
-        """Generate a response using the OpenAI Chat Completions API."""
+        """Generate a response using the OpenAI Chat Completions API.
+
+        Note: top_k and repetition_penalty are not supported by the OpenAI API
+        and are silently ignored.
+        """
         if not self._loaded or self._client is None:
             raise RuntimeError("OpenAI provider not initialized. Call load_model() first.")
 

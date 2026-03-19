@@ -201,6 +201,87 @@ body {
     color: #ef4444;
 }
 
+/* Generation Parameter Controls */
+.gen-controls {
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    padding: 0.75rem 1rem;
+    flex-shrink: 0;
+}
+
+.gen-controls-header {
+    font-size: 0.6875rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: rgba(255, 255, 255, 0.4);
+    margin-bottom: 0.625rem;
+}
+
+.gen-control-row {
+    margin-bottom: 0.5rem;
+}
+
+.gen-control-row:last-child {
+    margin-bottom: 0;
+}
+
+.gen-control-label {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.6875rem;
+    color: rgba(255, 255, 255, 0.65);
+    margin-bottom: 0.2rem;
+}
+
+.gen-control-value {
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.9);
+    font-variant-numeric: tabular-nums;
+    min-width: 2.5rem;
+    text-align: right;
+}
+
+.gen-control-slider {
+    width: 100%;
+    height: 4px;
+    -webkit-appearance: none;
+    appearance: none;
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 2px;
+    outline: none;
+    cursor: pointer;
+}
+
+.gen-control-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 12px;
+    height: 12px;
+    background: var(--primary-color);
+    border-radius: 50%;
+    cursor: pointer;
+    transition: background-color 0.15s;
+}
+
+.gen-control-slider::-webkit-slider-thumb:hover {
+    background: var(--primary-hover);
+}
+
+.gen-control-slider::-moz-range-thumb {
+    width: 12px;
+    height: 12px;
+    background: var(--primary-color);
+    border: none;
+    border-radius: 50%;
+    cursor: pointer;
+    transition: background-color 0.15s;
+}
+
+.gen-control-slider::-moz-range-thumb:hover {
+    background: var(--primary-hover);
+}
+
 /* Main Chat Container */
 .chat-container {
     flex: 1;

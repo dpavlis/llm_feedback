@@ -20,6 +20,10 @@ class ChatRequest(BaseModel):
 
     conversation_id: str
     message: str = Field(..., min_length=1, max_length=10000)
+    temperature: Optional[float] = Field(default=None, ge=0.0, le=2.0)
+    top_p: Optional[float] = Field(default=None, ge=0.0, le=1.0)
+    top_k: Optional[int] = Field(default=None, ge=0)
+    repetition_penalty: Optional[float] = Field(default=None, ge=1.0, le=2.0)
 
 
 class ChatResponse(BaseModel):
