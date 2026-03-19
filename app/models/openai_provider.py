@@ -1,4 +1,5 @@
 import logging
+import re
 import threading
 from typing import Optional
 
@@ -10,6 +11,12 @@ from app.config import settings
 from app.models.base_provider import BaseLLMProvider
 
 logger = logging.getLogger(__name__)
+
+THINKING_DISABLED_INSTRUCTION = (
+    "Thinking mode is disabled. Provide only the final answer without chain-of-thought, "
+    "internal reasoning, or <think> blocks."
+)
+THINK_TAG_RE = re.compile(r"<think>.*?</think>", re.IGNORECASE | re.DOTALL)
 
 
 class OpenAIProvider(BaseLLMProvider):
@@ -68,6 +75,9 @@ class OpenAIProvider(BaseLLMProvider):
         if settings.system_prompt:
             messages = [{"role": "system", "content": settings.system_prompt}] + messages
 
+        if not settings.enable_thinking_mode:
+            messages = [{"role": "system", "content": THINKING_DISABLED_INSTRUCTION}] + messages
+
         with self.lock:
             response = self._client.chat.completions.create(
                 model=settings.model_name,
@@ -77,7 +87,11 @@ class OpenAIProvider(BaseLLMProvider):
                 top_p=top_p,
             )
 
-        return response.choices[0].message.content.strip()
+        content = response.choices[0].message.content or ""
+        if not settings.enable_thinking_mode:
+            content = THINK_TAG_RE.sub("", content)
+
+        return content.strip()
 
     def count_tokens(self, messages: list[dict[str, str]]) -> int:
         """Count tokens for the given conversation messages."""

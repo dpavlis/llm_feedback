@@ -1,4 +1,5 @@
 import os
+import re
 import threading
 import logging
 from typing import Any, Optional, cast
@@ -11,6 +12,12 @@ from app.config import settings
 from app.models.base_provider import BaseLLMProvider
 
 logger = logging.getLogger(__name__)
+
+THINKING_DISABLED_INSTRUCTION = (
+    "Thinking mode is disabled. Respond with only the final answer. "
+    "Do not include chain-of-thought, internal reasoning, or <think> blocks."
+)
+THINK_TAG_RE = re.compile(r"<think>.*?</think>", re.IGNORECASE | re.DOTALL)
 
 
 class HuggingFaceProvider(BaseLLMProvider):
@@ -164,6 +171,12 @@ class HuggingFaceProvider(BaseLLMProvider):
                 load_in_8bit=True,
             )
         return None
+
+    def _apply_thinking_mode(self, messages: list[dict[str, str]]) -> list[dict[str, str]]:
+        """Apply thinking mode behavior to outgoing messages."""
+        if settings.enable_thinking_mode:
+            return messages
+        return self._apply_system_prompt(messages, THINKING_DISABLED_INSTRUCTION)
 
     def load_model(self) -> None:
         """Load the model and tokenizer. Called once at startup."""
@@ -323,6 +336,8 @@ class HuggingFaceProvider(BaseLLMProvider):
         if settings.system_prompt:
             messages = self._apply_system_prompt(messages, settings.system_prompt)
 
+        messages = self._apply_thinking_mode(messages)
+
         # Use lock to ensure thread-safe inference
         with self.lock:
             # Apply chat template (Qwen2.5 supports this natively)
@@ -375,6 +390,9 @@ class HuggingFaceProvider(BaseLLMProvider):
             # Decode only the new tokens (response)
             response_ids = outputs[0][input_ids.shape[1] :]
             response = self.tokenizer.decode(response_ids, skip_special_tokens=True)
+
+            if not settings.enable_thinking_mode:
+                response = THINK_TAG_RE.sub("", response)
 
             return response.strip()
 

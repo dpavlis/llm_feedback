@@ -19,6 +19,7 @@
             <div class="sidebar-header">
                 <h2>{{ app_name }}</h2>
                 <div class="model-info">Model: {{ model_name }}</div>
+                <div class="model-info">Thinking: {{ 'Enabled' if thinking_enabled else 'Disabled' }}</div>
                 <div class="model-info">Context: {{ max_model_len }} tokens</div>
             </div>
             <button id="new-conversation-btn" class="new-conversation-btn">

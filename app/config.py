@@ -99,6 +99,10 @@ class Settings(BaseSettings):
         default=1024,
         description="Maximum tokens to generate in a single response"
     )
+    enable_thinking_mode: bool = Field(
+        default=True,
+        description="Enable reasoning/thinking mode when supported by the model"
+    )
     temperature: float = Field(
         default=0.7,
         ge=0.0,

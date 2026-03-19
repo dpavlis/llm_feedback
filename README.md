@@ -62,6 +62,7 @@ All settings can be configured in `.env` file. Key options:
 | `CUDA_VISIBLE_DEVICES` | - | Restrict visible GPUs (e.g., `0,1`) |
 | `LOAD_IN_4BIT` | false | Enable 4-bit quantization |
 | `LOAD_IN_8BIT` | false | Enable 8-bit quantization |
+| `ENABLE_THINKING_MODE` | true | Enable/disable model reasoning mode |
 | `TEMPERATURE` | 0.7 | Sampling temperature |
 | `MAX_RESPONSE_TOKENS` | 1024 | Max tokens per response |
 | `SYSTEM_PROMPT` | - | Optional system prompt for all conversations |
