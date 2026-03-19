@@ -29,19 +29,10 @@ class ChatApp {
 
     initGenControls() {
         const cfg = window.APP_CONFIG || {};
-        const temperature = cfg.defaultTemperature ?? 0.7;
-        const topP = cfg.defaultTopP ?? 0.9;
-        const topK = cfg.defaultTopK ?? 50;
-        const repPenalty = cfg.defaultRepetitionPenalty ?? 1.2;
-
-        this.ctrlTemperature.value = temperature;
-        this.ctrlTemperatureVal.textContent = temperature.toFixed(2);
-        this.ctrlTopP.value = topP;
-        this.ctrlTopPVal.textContent = topP.toFixed(2);
-        this.ctrlTopK.value = topK;
-        this.ctrlTopKVal.textContent = topK;
-        this.ctrlRepPenalty.value = repPenalty;
-        this.ctrlRepPenaltyVal.textContent = repPenalty.toFixed(2);
+        this.ctrlTemperature.value = (cfg.defaultTemperature ?? 0.7).toFixed(2);
+        this.ctrlTopP.value = (cfg.defaultTopP ?? 0.9).toFixed(2);
+        this.ctrlTopK.value = cfg.defaultTopK ?? 50;
+        this.ctrlRepPenalty.value = (cfg.defaultRepetitionPenalty ?? 1.2).toFixed(2);
     }
 
     configureMarked() {
@@ -113,13 +104,9 @@ class ChatApp {
 
         // Generation controls
         this.ctrlTemperature = document.getElementById('ctrl-temperature');
-        this.ctrlTemperatureVal = document.getElementById('ctrl-temperature-val');
         this.ctrlTopP = document.getElementById('ctrl-top-p');
-        this.ctrlTopPVal = document.getElementById('ctrl-top-p-val');
         this.ctrlTopK = document.getElementById('ctrl-top-k');
-        this.ctrlTopKVal = document.getElementById('ctrl-top-k-val');
         this.ctrlRepPenalty = document.getElementById('ctrl-rep-penalty');
-        this.ctrlRepPenaltyVal = document.getElementById('ctrl-rep-penalty-val');
     }
 
     bindEvents() {
@@ -175,19 +162,6 @@ class ChatApp {
             }
         });
 
-        // Generation control sliders
-        this.ctrlTemperature.addEventListener('input', () => {
-            this.ctrlTemperatureVal.textContent = parseFloat(this.ctrlTemperature.value).toFixed(2);
-        });
-        this.ctrlTopP.addEventListener('input', () => {
-            this.ctrlTopPVal.textContent = parseFloat(this.ctrlTopP.value).toFixed(2);
-        });
-        this.ctrlTopK.addEventListener('input', () => {
-            this.ctrlTopKVal.textContent = this.ctrlTopK.value;
-        });
-        this.ctrlRepPenalty.addEventListener('input', () => {
-            this.ctrlRepPenaltyVal.textContent = parseFloat(this.ctrlRepPenalty.value).toFixed(2);
-        });
     }
 
     autoResizeTextarea() {
