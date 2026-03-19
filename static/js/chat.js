@@ -21,18 +21,9 @@ class ChatApp {
     init() {
         this.bindElements();
         this.bindEvents();
-        this.initGenControls();
         this.loadConversations();
         this.autoResizeTextarea();
         this.configureMarked();
-    }
-
-    initGenControls() {
-        const cfg = window.APP_CONFIG || {};
-        this.ctrlTemperature.value = (cfg.defaultTemperature ?? 0.7).toFixed(2);
-        this.ctrlTopP.value = (cfg.defaultTopP ?? 0.9).toFixed(2);
-        this.ctrlTopK.value = cfg.defaultTopK ?? 50;
-        this.ctrlRepPenalty.value = (cfg.defaultRepetitionPenalty ?? 1.2).toFixed(2);
     }
 
     configureMarked() {
