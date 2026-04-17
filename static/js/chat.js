@@ -420,6 +420,9 @@ class ChatApp {
         // Show typing indicator
         this.showTypingIndicator();
 
+        let assistantMessageRef = null;
+        let streamedContent = '';
+
         try {
             const response = await fetch('/api/chat', {
                 method: 'POST',
@@ -433,6 +436,7 @@ class ChatApp {
                     top_p: parseFloat(this.ctrlTopP.value),
                     top_k: parseInt(this.ctrlTopK.value, 10),
                     repetition_penalty: parseFloat(this.ctrlRepPenalty.value),
+                    stream: true,
                 }),
             });
 
@@ -440,9 +444,24 @@ class ChatApp {
                 throw new Error('Failed to send message');
             }
 
-            const data = await response.json();
+            assistantMessageRef = this.appendMessage('assistant', '');
+            const streamResult = await this.streamChatResponse(response, (chunk) => {
+                streamedContent += chunk;
+                this.updateAssistantMessageContent(assistantMessageRef, streamedContent);
+                this.hideTypingIndicator();
+            });
+
             this.hideTypingIndicator();
-            this.appendMessage('assistant', data.response, data.message_id, null, data.generation_ms);
+            if (streamResult.response && streamResult.response !== streamedContent) {
+                streamedContent = streamResult.response;
+                this.updateAssistantMessageContent(assistantMessageRef, streamedContent);
+            }
+            this.finalizeAssistantMessage(
+                assistantMessageRef,
+                streamResult.message_id,
+                null,
+                streamResult.generation_ms,
+            );
 
             // Reload conversation list to update preview
             this.loadConversations();
@@ -456,9 +475,76 @@ class ChatApp {
         }
     }
 
+    async streamChatResponse(response, onToken) {
+        if (!response.body) {
+            throw new Error('Streaming response body is not available');
+        }
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let donePayload = null;
+
+        while (true) {
+            const { value, done } = await reader.read();
+            if (done) {
+                break;
+            }
+
+            buffer += decoder.decode(value, { stream: true });
+
+            while (true) {
+                const boundary = buffer.indexOf('\n\n');
+                if (boundary === -1) {
+                    break;
+                }
+
+                const rawEvent = buffer.slice(0, boundary);
+                buffer = buffer.slice(boundary + 2);
+                const event = this.parseSseEvent(rawEvent);
+                if (!event) {
+                    continue;
+                }
+
+                if (event.type === 'token') {
+                    onToken(event.content || '');
+                } else if (event.type === 'done') {
+                    donePayload = event;
+                } else if (event.type === 'error') {
+                    throw new Error(event.detail || 'Streaming failed');
+                }
+            }
+        }
+
+        if (!donePayload) {
+            throw new Error('Streaming ended without completion payload');
+        }
+        return donePayload;
+    }
+
+    parseSseEvent(rawEvent) {
+        const dataLines = rawEvent
+            .split('\n')
+            .filter(line => line.startsWith('data:'))
+            .map(line => line.slice(5).trim());
+
+        if (dataLines.length === 0) {
+            return null;
+        }
+
+        const payload = dataLines.join('\n');
+        try {
+            return JSON.parse(payload);
+        } catch (error) {
+            console.error('Invalid SSE payload:', payload);
+            return null;
+        }
+    }
+
     appendMessage(role, content, messageId = null, feedback = null, generationMs = null) {
         const messageDiv = document.createElement('div');
         messageDiv.className = `message ${role}`;
+        messageDiv.dataset.rawContent = content;
 
         const contentDiv = document.createElement('div');
         contentDiv.className = 'message-content';
@@ -480,7 +566,7 @@ class ChatApp {
         copyBtn.className = 'copy-msg-btn';
         copyBtn.title = 'Copy to clipboard';
         copyBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
-        copyBtn.addEventListener('click', () => this.copyMessageToClipboard(content, copyBtn));
+        copyBtn.addEventListener('click', () => this.copyMessageToClipboard(messageDiv.dataset.rawContent || '', copyBtn));
         actionsDiv.appendChild(copyBtn);
 
         // Add feedback button for assistant messages
@@ -508,6 +594,46 @@ class ChatApp {
 
         this.messagesArea.appendChild(messageDiv);
         this.scrollToBottom();
+
+        return {
+            messageDiv,
+            contentDiv,
+            actionsDiv,
+        };
+    }
+
+    updateAssistantMessageContent(messageRef, content) {
+        if (!messageRef || !messageRef.contentDiv || !messageRef.messageDiv) {
+            return;
+        }
+
+        messageRef.messageDiv.dataset.rawContent = content;
+        messageRef.contentDiv.innerHTML = this.renderMarkdown(content);
+        this.scrollToBottom();
+    }
+
+    finalizeAssistantMessage(messageRef, messageId, feedback = null, generationMs = null) {
+        if (!messageRef || !messageRef.actionsDiv || !messageId) {
+            return;
+        }
+
+        const feedbackBtn = document.createElement('button');
+        feedbackBtn.className = 'feedback-btn';
+        if (feedback) {
+            feedbackBtn.classList.add('submitted');
+            feedbackBtn.textContent = `✓ Rated ${feedback.rating || '-'}/5`;
+        } else {
+            feedbackBtn.textContent = '👍 Rate this response';
+        }
+        feedbackBtn.addEventListener('click', () => this.openFeedbackModal(messageId, feedback));
+        messageRef.actionsDiv.appendChild(feedbackBtn);
+
+        if (Number.isFinite(generationMs)) {
+            const genTime = document.createElement('span');
+            genTime.className = 'gen-time';
+            genTime.textContent = `⏱ ${this.formatDurationMs(generationMs)}`;
+            messageRef.actionsDiv.appendChild(genTime);
+        }
     }
 
     formatDurationMs(durationMs) {

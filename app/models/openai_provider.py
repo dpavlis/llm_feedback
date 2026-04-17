@@ -1,7 +1,7 @@
 import logging
 import re
 import threading
-from typing import Optional
+from typing import Iterator, Optional
 
 import tiktoken
 
@@ -100,6 +100,49 @@ class OpenAIProvider(BaseLLMProvider):
             content = THINK_TAG_RE.sub("", content)
 
         return content.strip()
+
+    def stream_response(
+        self,
+        messages: list[dict[str, str]],
+        max_new_tokens: Optional[int] = None,
+        temperature: Optional[float] = None,
+        top_p: Optional[float] = None,
+        top_k: Optional[int] = None,
+        repetition_penalty: Optional[float] = None,
+    ) -> Iterator[str]:
+        """Stream response chunks using the OpenAI Chat Completions API."""
+        if not self._loaded or self._client is None:
+            raise RuntimeError("OpenAI provider not initialized. Call load_model() first.")
+
+        max_new_tokens = max_new_tokens if max_new_tokens is not None else settings.max_response_tokens
+        temperature = temperature if temperature is not None else settings.temperature
+        top_p = top_p if top_p is not None else settings.top_p
+
+        # Keep a single system message at the beginning for strict chat templates.
+        system_instructions: list[str] = []
+        if settings.system_prompt:
+            system_instructions.append(settings.system_prompt)
+        if not settings.enable_thinking_mode:
+            system_instructions.append(THINKING_DISABLED_INSTRUCTION)
+        if system_instructions:
+            messages = [{"role": "system", "content": "\n\n".join(system_instructions)}] + messages
+
+        with self.lock:
+            stream = self._client.chat.completions.create(
+                model=settings.model_name,
+                messages=messages,
+                max_tokens=max_new_tokens,
+                temperature=temperature,
+                top_p=top_p,
+                stream=True,
+            )
+
+            for chunk in stream:
+                if not chunk.choices:
+                    continue
+                delta = chunk.choices[0].delta.content or ""
+                if delta:
+                    yield delta
 
     def count_tokens(self, messages: list[dict[str, str]]) -> int:
         """Count tokens for the given conversation messages."""

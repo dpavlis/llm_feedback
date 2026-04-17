@@ -1,9 +1,12 @@
 import logging
+import json
 import time
+import asyncio
 from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, Request, Response, HTTPException, Depends
+from fastapi import APIRouter, Request, Response, HTTPException
+from fastapi.responses import StreamingResponse
 
 from app.config import settings
 from app.schemas import (
@@ -172,7 +175,12 @@ async def delete_conversation(
     return {"success": True, "message": "Conversation deleted from session"}
 
 
-@router.post("/chat", response_model=ChatResponse)
+def _sse_event(payload: dict) -> str:
+    """Serialize one server-sent event data frame."""
+    return f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
+
+
+@router.post("/chat")
 async def send_message(chat_request: ChatRequest, request: Request, response: Response):
     """Send a message and get an LLM response."""
     session_manager = request.app.state.session_manager
@@ -194,7 +202,7 @@ async def send_message(chat_request: ChatRequest, request: Request, response: Re
         raise HTTPException(status_code=404, detail="Conversation not found")
 
     # Add user message to session
-    user_message_id = await session_manager.add_message(
+    await session_manager.add_message(
         session_id,
         chat_request.conversation_id,
         role="user",
@@ -206,7 +214,78 @@ async def send_message(chat_request: ChatRequest, request: Request, response: Re
         session_id, chat_request.conversation_id
     )
 
-    # Generate response
+    if chat_request.stream:
+        async def event_stream():
+            start_time = time.perf_counter()
+            response_parts: list[str] = []
+
+            try:
+                iterator = llm_manager.stream_response(
+                    messages,
+                    temperature=chat_request.temperature,
+                    top_p=chat_request.top_p,
+                    top_k=chat_request.top_k,
+                    repetition_penalty=chat_request.repetition_penalty,
+                )
+
+                while True:
+                    chunk = await asyncio.to_thread(lambda: next(iterator, None))
+                    if chunk is None:
+                        break
+                    response_parts.append(chunk)
+                    yield _sse_event({"type": "token", "content": chunk})
+
+                llm_response = "".join(response_parts).strip()
+                elapsed_ms = int((time.perf_counter() - start_time) * 1000)
+
+                assistant_message_id = await session_manager.add_message(
+                    session_id,
+                    chat_request.conversation_id,
+                    role="assistant",
+                    content=llm_response,
+                    generation_ms=elapsed_ms,
+                )
+
+                conversation_data = await session_manager.get_conversation(
+                    session_id,
+                    chat_request.conversation_id,
+                )
+                await persistence.save_conversation(
+                    conversation_id=chat_request.conversation_id,
+                    session_id=session_id,
+                    created_at=conversation_data["created_at"],
+                    messages=conversation_data["messages"],
+                    model_name=llm_manager.model_name,
+                    user_name=conversation_data.get("user_name"),
+                )
+
+                yield _sse_event(
+                    {
+                        "type": "done",
+                        "conversation_id": chat_request.conversation_id,
+                        "message_id": assistant_message_id,
+                        "timestamp": datetime.utcnow().isoformat(),
+                        "generation_ms": elapsed_ms,
+                        "response": llm_response,
+                    }
+                )
+            except Exception as e:
+                logger.error(f"LLM streaming failed: {e}")
+                yield _sse_event({"type": "error", "detail": "Failed to generate response"})
+
+        stream_response = StreamingResponse(
+            event_stream(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no",
+            },
+        )
+        set_session_cookie(stream_response, session_id)
+        return stream_response
+
+    # Non-streaming fallback
     try:
         start_time = time.perf_counter()
         llm_response = llm_manager.generate_response(
@@ -221,7 +300,6 @@ async def send_message(chat_request: ChatRequest, request: Request, response: Re
         logger.error(f"LLM generation failed: {e}")
         raise HTTPException(status_code=500, detail="Failed to generate response")
 
-    # Add assistant message to session
     assistant_message_id = await session_manager.add_message(
         session_id,
         chat_request.conversation_id,
@@ -230,7 +308,6 @@ async def send_message(chat_request: ChatRequest, request: Request, response: Re
         generation_ms=elapsed_ms,
     )
 
-    # Persist to file
     conversation = await session_manager.get_conversation(
         session_id, chat_request.conversation_id
     )
@@ -243,13 +320,11 @@ async def send_message(chat_request: ChatRequest, request: Request, response: Re
         user_name=conversation.get("user_name"),
     )
 
-    timestamp = datetime.utcnow().isoformat()
-
     return ChatResponse(
         conversation_id=chat_request.conversation_id,
         message_id=assistant_message_id,
         response=llm_response,
-        timestamp=timestamp,
+        timestamp=datetime.utcnow().isoformat(),
         generation_ms=elapsed_ms,
     )
 

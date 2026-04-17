@@ -24,6 +24,10 @@ class ChatRequest(BaseModel):
     top_p: Optional[float] = Field(default=None, ge=0.0, le=1.0)
     top_k: Optional[int] = Field(default=None, ge=0)
     repetition_penalty: Optional[float] = Field(default=None, ge=1.0, le=2.0)
+    stream: bool = Field(
+        default=False,
+        description="If true, stream partial response chunks using SSE",
+    )
 
 
 class ChatResponse(BaseModel):

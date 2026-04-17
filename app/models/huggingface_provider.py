@@ -2,10 +2,10 @@ import os
 import re
 import threading
 import logging
-from typing import Any, Optional, cast
+from typing import Any, Iterator, Optional, cast
 
 import torch
-from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
+from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig, TextIteratorStreamer
 from transformers import PreTrainedModel, PreTrainedTokenizer, PreTrainedTokenizerBase
 
 from app.config import settings
@@ -408,6 +408,109 @@ class HuggingFaceProvider(BaseLLMProvider):
                 response = THINK_TAG_RE.sub("", response)
 
             return response.strip()
+
+    def stream_response(
+        self,
+        messages: list[dict[str, str]],
+        max_new_tokens: Optional[int] = None,
+        temperature: Optional[float] = None,
+        top_p: Optional[float] = None,
+        top_k: Optional[int] = None,
+        repetition_penalty: Optional[float] = None,
+    ) -> Iterator[str]:
+        """Stream response chunks using a TextIteratorStreamer."""
+        if not self._loaded:
+            raise RuntimeError("Model not loaded. Call load_model() first.")
+
+        assert self.tokenizer is not None
+        assert self.model is not None
+
+        max_new_tokens = max_new_tokens if max_new_tokens is not None else settings.max_response_tokens
+        temperature = temperature if temperature is not None else settings.temperature
+        top_p = top_p if top_p is not None else settings.top_p
+        effective_top_k = top_k if top_k is not None else settings.top_k
+        effective_rep_penalty = repetition_penalty if repetition_penalty is not None else settings.repetition_penalty
+
+        system_instructions: list[str] = []
+        if settings.system_prompt:
+            system_instructions.append(settings.system_prompt)
+        if not settings.enable_thinking_mode:
+            system_instructions.append(THINKING_DISABLED_INSTRUCTION)
+        if system_instructions:
+            messages = self._apply_system_prompt(
+                messages,
+                "\n\n".join(system_instructions),
+            )
+
+        text = cast(str, self.tokenizer.apply_chat_template(
+            messages,
+            tokenize=False,
+            add_generation_prompt=True,
+        ))
+        logger.debug(f"Rendered prompt:\n{text}")
+
+        inputs = self.tokenizer(
+            text,
+            return_tensors="pt",
+            truncation=True,
+            max_length=settings.max_model_len - max_new_tokens,
+        )
+
+        input_ids = cast(torch.Tensor, inputs["input_ids"]).to(self.device)
+        attention_mask = cast(torch.Tensor, inputs["attention_mask"]).to(self.device)
+
+        streamer = TextIteratorStreamer(
+            self.tokenizer,
+            skip_prompt=True,
+            skip_special_tokens=True,
+        )
+
+        gen_kwargs: dict[str, Any] = {
+            "max_new_tokens": max_new_tokens,
+            "pad_token_id": self.tokenizer.pad_token_id,
+            "eos_token_id": self._eos_token_ids or self.tokenizer.eos_token_id,
+            "streamer": streamer,
+        }
+
+        if temperature > 0:
+            gen_kwargs.update({
+                "do_sample": True,
+                "temperature": temperature,
+                "top_p": top_p,
+                "top_k": effective_top_k if effective_top_k > 0 else None,
+                "repetition_penalty": effective_rep_penalty,
+            })
+        else:
+            gen_kwargs["do_sample"] = False
+
+        generation_error: dict[str, Exception] = {}
+
+        def _run_generation() -> None:
+            try:
+                with self.lock:
+                    with torch.no_grad():
+                        self.model.generate(  # type: ignore[call-overload]
+                            input_ids,
+                            attention_mask=attention_mask,
+                            **gen_kwargs,
+                        )
+            except Exception as exc:  # pragma: no cover - exercised at runtime
+                generation_error["error"] = exc
+
+        worker = threading.Thread(target=_run_generation, daemon=True)
+        worker.start()
+
+        for chunk in streamer:
+            if not chunk:
+                continue
+            if not settings.enable_thinking_mode:
+                chunk = THINK_TAG_RE.sub("", chunk)
+            if chunk:
+                yield chunk
+
+        worker.join()
+        if "error" in generation_error:
+            raise generation_error["error"]
 
     def count_tokens(self, messages: list[dict[str, str]]) -> int:
         """Count tokens for the given conversation messages."""
