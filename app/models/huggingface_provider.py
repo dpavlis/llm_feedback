@@ -338,11 +338,18 @@ class HuggingFaceProvider(BaseLLMProvider):
         effective_top_k = top_k if top_k is not None else settings.top_k
         effective_rep_penalty = repetition_penalty if repetition_penalty is not None else settings.repetition_penalty
 
-        # Prepend system prompt if configured
+        # Build a single system instruction block so chat templates that require
+        # one system message at position 0 (e.g., Qwen) always receive valid input.
+        system_instructions: list[str] = []
         if settings.system_prompt:
-            messages = self._apply_system_prompt(messages, settings.system_prompt)
-
-        messages = self._apply_thinking_mode(messages)
+            system_instructions.append(settings.system_prompt)
+        if not settings.enable_thinking_mode:
+            system_instructions.append(THINKING_DISABLED_INSTRUCTION)
+        if system_instructions:
+            messages = self._apply_system_prompt(
+                messages,
+                "\n\n".join(system_instructions),
+            )
 
         # Use lock to ensure thread-safe inference
         with self.lock:
@@ -410,8 +417,16 @@ class HuggingFaceProvider(BaseLLMProvider):
         if not messages:
             return 0
 
+        system_instructions: list[str] = []
         if settings.system_prompt:
-            messages = self._apply_system_prompt(messages, settings.system_prompt)
+            system_instructions.append(settings.system_prompt)
+        if not settings.enable_thinking_mode:
+            system_instructions.append(THINKING_DISABLED_INSTRUCTION)
+        if system_instructions:
+            messages = self._apply_system_prompt(
+                messages,
+                "\n\n".join(system_instructions),
+            )
 
         with self.lock:
             text = cast(str, self.tokenizer.apply_chat_template(
@@ -433,9 +448,14 @@ class HuggingFaceProvider(BaseLLMProvider):
         if not self._loaded or self.tokenizer is None:
             raise RuntimeError("Model not loaded. Call load_model() first.")
 
-        system_tokens = 0
+        system_instructions: list[str] = []
         if settings.system_prompt:
-            system_tokens = len(self.tokenizer.encode(settings.system_prompt))
+            system_instructions.append(settings.system_prompt)
+        if not settings.enable_thinking_mode:
+            system_instructions.append(THINKING_DISABLED_INSTRUCTION)
+        system_tokens = 0
+        if system_instructions:
+            system_tokens = len(self.tokenizer.encode("\n\n".join(system_instructions)))
 
         user_tokens = 0
         assistant_tokens = 0

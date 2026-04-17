@@ -77,12 +77,14 @@ class OpenAIProvider(BaseLLMProvider):
         temperature = temperature if temperature is not None else settings.temperature
         top_p = top_p if top_p is not None else settings.top_p
 
-        # Prepend system prompt if configured
+        # Keep a single system message at the beginning for strict chat templates.
+        system_instructions: list[str] = []
         if settings.system_prompt:
-            messages = [{"role": "system", "content": settings.system_prompt}] + messages
-
+            system_instructions.append(settings.system_prompt)
         if not settings.enable_thinking_mode:
-            messages = [{"role": "system", "content": THINKING_DISABLED_INSTRUCTION}] + messages
+            system_instructions.append(THINKING_DISABLED_INSTRUCTION)
+        if system_instructions:
+            messages = [{"role": "system", "content": "\n\n".join(system_instructions)}] + messages
 
         with self.lock:
             response = self._client.chat.completions.create(
@@ -104,8 +106,13 @@ class OpenAIProvider(BaseLLMProvider):
         if not messages:
             return 0
 
+        system_instructions: list[str] = []
         if settings.system_prompt:
-            messages = [{"role": "system", "content": settings.system_prompt}] + messages
+            system_instructions.append(settings.system_prompt)
+        if not settings.enable_thinking_mode:
+            system_instructions.append(THINKING_DISABLED_INSTRUCTION)
+        if system_instructions:
+            messages = [{"role": "system", "content": "\n\n".join(system_instructions)}] + messages
 
         try:
             encoding = tiktoken.encoding_for_model(settings.model_name)
@@ -136,8 +143,11 @@ class OpenAIProvider(BaseLLMProvider):
         if not messages:
             return {"system": 0, "user": 0, "assistant": 0, "total": 0}
 
+        system_instructions: list[str] = []
         if settings.system_prompt:
-            messages = [{"role": "system", "content": settings.system_prompt}] + messages
+            system_instructions.append(settings.system_prompt)
+        if not settings.enable_thinking_mode:
+            system_instructions.append(THINKING_DISABLED_INSTRUCTION)
 
         try:
             encoding = tiktoken.encoding_for_model(settings.model_name)
@@ -157,6 +167,9 @@ class OpenAIProvider(BaseLLMProvider):
                 user_tokens += token_count
             elif role == "assistant":
                 assistant_tokens += token_count
+
+        if system_instructions:
+            system_tokens = len(encoding.encode("\n\n".join(system_instructions)))
 
         total_tokens = self.count_tokens(messages)
         return {
