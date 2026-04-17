@@ -428,6 +428,7 @@ class ChatApp {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
+                    'Accept': 'text/event-stream',
                 },
                 body: JSON.stringify({
                     conversation_id: this.currentConversationId,
@@ -493,28 +494,11 @@ class ChatApp {
 
             buffer += decoder.decode(value, { stream: true });
 
-            while (true) {
-                const boundary = buffer.indexOf('\n\n');
-                if (boundary === -1) {
-                    break;
-                }
-
-                const rawEvent = buffer.slice(0, boundary);
-                buffer = buffer.slice(boundary + 2);
-                const event = this.parseSseEvent(rawEvent);
-                if (!event) {
-                    continue;
-                }
-
-                if (event.type === 'token') {
-                    onToken(event.content || '');
-                } else if (event.type === 'done') {
-                    donePayload = event;
-                } else if (event.type === 'error') {
-                    throw new Error(event.detail || 'Streaming failed');
-                }
-            }
+            ({ buffer, donePayload } = this.consumeSseBuffer(buffer, donePayload, onToken));
         }
+
+        buffer += decoder.decode();
+        ({ buffer, donePayload } = this.consumeSseBuffer(buffer, donePayload, onToken));
 
         if (!donePayload) {
             throw new Error('Streaming ended without completion payload');
@@ -522,9 +506,40 @@ class ChatApp {
         return donePayload;
     }
 
+    consumeSseBuffer(buffer, donePayload, onToken) {
+        const eventBoundary = /\r?\n\r?\n/;
+
+        while (true) {
+            const match = buffer.match(eventBoundary);
+            if (!match || match.index === undefined) {
+                break;
+            }
+
+            const boundaryIndex = match.index;
+            const boundaryLen = match[0].length;
+            const rawEvent = buffer.slice(0, boundaryIndex);
+            buffer = buffer.slice(boundaryIndex + boundaryLen);
+
+            const event = this.parseSseEvent(rawEvent);
+            if (!event) {
+                continue;
+            }
+
+            if (event.type === 'token') {
+                onToken(event.content || '');
+            } else if (event.type === 'done') {
+                donePayload = event;
+            } else if (event.type === 'error') {
+                throw new Error(event.detail || 'Streaming failed');
+            }
+        }
+
+        return { buffer, donePayload };
+    }
+
     parseSseEvent(rawEvent) {
         const dataLines = rawEvent
-            .split('\n')
+            .split(/\r?\n/)
             .filter(line => line.startsWith('data:'))
             .map(line => line.slice(5).trim());
 

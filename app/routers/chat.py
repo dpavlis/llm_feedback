@@ -220,6 +220,8 @@ async def send_message(chat_request: ChatRequest, request: Request, response: Re
             response_parts: list[str] = []
 
             try:
+                yield _sse_event({"type": "start"})
+
                 iterator = llm_manager.stream_response(
                     messages,
                     temperature=chat_request.temperature,
